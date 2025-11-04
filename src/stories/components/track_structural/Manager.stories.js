@@ -8,7 +8,8 @@ export default {
     layout: 'centered',
   },
   argTypes: {
-    moleculeId: {}
+    moleculeId: {},
+    sequence: {}
   }
 };
 
@@ -18,5 +19,6 @@ export default {
 export const Main = {
   args: {
     moleculeId: '1CBS',
+    sequence: 'SEQUENCEEXAMPLEBIOHACKATHONBERLIN',
   }
 };

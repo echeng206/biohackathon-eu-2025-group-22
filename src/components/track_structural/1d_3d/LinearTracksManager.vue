@@ -6,10 +6,9 @@
     <nightingale-manager id="mgr">
         <table>
             <tbody>
-                <tr>
-                    <td></td>
-                    <td></td>
-                </tr>
+                <slot>
+                    <tr><td colspan="2">No tracks yet</td></tr>
+                </slot>
             </tbody>
         </table>
     </nightingale-manager>

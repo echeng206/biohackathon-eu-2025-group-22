@@ -1,9 +1,12 @@
 <script setup>
     import StructureViewer from "./StructureViewer.vue";
+    import SequenceNavigation from "./SequenceNavigation.vue";
     import LinearTracksManager from "./LinearTracksManager.vue";
+    import SequenceTrack from "./SequenceTrack.vue";
     
     const props = defineProps({
-        moleculeId: { type: String, required: true, default: '1CBS' }
+        moleculeId: { type: String, required: true, default: '1CBS' },
+        sequence: { type: String, required: true, default: 'SEQUENCE' }
     });
 </script>
 
@@ -13,7 +16,20 @@
     </div>
     <div class="grid">
         <div class="left">
-            <LinearTracksManager />
+            <LinearTracksManager>
+                <tr>
+                    <td></td>
+                    <td>
+                        <SequenceNavigation :sequence="sequence" height="40" />
+                    </td>
+                </tr>
+                <tr>
+                    <td>Sequence</td>
+                    <td>
+                        <SequenceTrack :sequence="sequence" height="40"/>
+                    </td>
+                </tr>
+            </LinearTracksManager>
         </div>
         <div class="right">
             <StructureViewer 
@@ -31,7 +47,7 @@
     :root { --panel-height: 560px; }
     body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; align-items: stretch; }
-    .left, .right { height: var(--panel-height); min-height: var(--panel-height); }
+    .left, .right { height: var(--panel-height); min-height: var(--panel-height); padding: 2em; }
     .left { overflow: auto; border-right: 1px solid #e5e7eb; padding-right: 8px; }
     .right { display: flex; flex-direction: column; }
     .panel { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
