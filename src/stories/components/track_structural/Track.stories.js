@@ -13,11 +13,12 @@ export default {
       description: 'The SEQUENCE text to display'
     },
     height: {
-      label: "Track height",
-      description: "Track height"
+      label: "Track_height",
+      description: "Track_height"
     }
   }
 };
+
 
 /**
  * Primary template with red background
