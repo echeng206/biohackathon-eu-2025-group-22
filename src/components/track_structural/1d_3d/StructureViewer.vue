@@ -1,24 +1,21 @@
 <template>
   <section class="viewer-wrapper">
-    <header class="viewer-header">
-      <h1>3D View</h1>
-    </header>
-
-    <!-- PDBe Mol* Web Component -->
-    <pdbe-molstar
-      ref="molstarEl"
-      class="molstar"
-      :style="inlineStyle"
-      :molecule-id="normalizedId"
-      :hide-controls="hideControls ? 'true' : 'false'"
-      :bg-color="bgColor"
-      :load-dimensions="loadDensity ? 'true' : 'false'"
-      :preset="preset"
-    ></pdbe-molstar>
-
-    <footer class="viewer-footer">
-      <p>End of the story.</p>
-    </footer>
+    <div class="container">
+      <!-- PDBe Mol* Web Component -->
+      <pdbe-molstar
+        ref="molstarEl"
+        class="molstar"
+        :style="inlineStyle"
+        :molecule-id="normalizedId"
+        :hide-controls="hideControls ? 'true' : 'false'"
+        :bg-color-r="bgColorR"
+        :bg-color-g="bgColorG"
+        :bg-color-b="bgColorB"
+        :load-dimensions="loadDensity ? 'true' : 'false'"
+        :preset="preset"
+        expanded='false'
+      ></pdbe-molstar>
+    </div>
   </section>
 </template>
 
@@ -42,7 +39,9 @@ const props = defineProps({
   width: { type: [Number, String], default: 800 },
   height: { type: [Number, String], default: 500 },
   hideControls: { type: Boolean, default: false },
-  bgColor: { type: String, default: '#ffffff' },
+  bgColorR: { type: String, default: 255 },
+  bgColorG: { type: String, default: 255 },
+  bgColorB: { type: String, default: 255 },
   loadDensity: { type: Boolean, default: false },
   preset: { type: String, default: '' },
 });
@@ -56,8 +55,8 @@ const normalizedId = computed(() => (props.moleculeId || '').toLowerCase());
 // Inline sizing
 const toCss = (v) => (typeof v === 'number' ? `${v}px` : String(v));
 const inlineStyle = computed(() => ({
-  width: toCss(props.width),
-  height: toCss(props.height),
+  width: toCss(parseInt(props.width)),
+  height: toCss(parseInt(props.height)),
   display: 'block',
 }));
 
@@ -108,12 +107,20 @@ watch(
 .viewer-wrapper {
   box-sizing: border-box;
 }
+
 .viewer-header, .viewer-footer {
   margin: 0 0 8px 0;
 }
+
 .molstar {
   /* The component respects its own width/height,
      but a min-height helps avoid a collapsed canvas during mount. */
-  min-height: 300px;
+  /* min-height: 300px; */
+}
+
+.container {
+  width: 200px;
+  max-width: 200px;
+  background-color: azure;
 }
 </style>
