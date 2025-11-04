@@ -3,6 +3,7 @@
     import SequenceNavigation from "./SequenceNavigation.vue";
     import LinearTracksManager from "./LinearTracksManager.vue";
     import SequenceTrack from "./SequenceTrack.vue";
+    import ColouredSequenceTrack from "./ColouredSequenceTrack.vue";
     
     const props = defineProps({
         moleculeId: { type: String, required: true, default: '1CBS' },
@@ -27,6 +28,12 @@
                     <td>Sequence</td>
                     <td>
                         <SequenceTrack :sequence="sequence" height="40"/>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <ColouredSequenceTrack :sequence="sequence" height="40" />
                     </td>
                 </tr>
             </LinearTracksManager>
