@@ -1,7 +1,5 @@
 <template>
-  <section class="viewer-wrapper">
-    <div class="container">
-      <!-- PDBe Mol* Web Component -->
+    <div class="viewer-wrapper">
       <pdbe-molstar
         ref="molstarEl"
         class="molstar"
@@ -13,10 +11,17 @@
         :bg-color-b="bgColorB"
         :load-dimensions="loadDensity ? 'true' : 'false'"
         :preset="preset"
-        expanded='false'
+        expanded="false"
+        landscape="false"
+        reactive="false"
+        hide-water="true"
+        hide-het="true"
+        hide-non-standard="true"
+        load-maps="false"
+        sequence-panel="false"
+        loading-overlay="true"
       ></pdbe-molstar>
     </div>
-  </section>
 </template>
 
 <script setup>
@@ -105,22 +110,9 @@ watch(
 
 <style scoped>
 .viewer-wrapper {
-  box-sizing: border-box;
-}
-
-.viewer-header, .viewer-footer {
-  margin: 0 0 8px 0;
-}
-
-.molstar {
-  /* The component respects its own width/height,
-     but a min-height helps avoid a collapsed canvas during mount. */
-  /* min-height: 300px; */
-}
-
-.container {
-  width: 200px;
-  max-width: 200px;
-  background-color: azure;
+  width: 100%;
+  max-width: 100%;
+  height: 80%;
+  position: relative;
 }
 </style>
