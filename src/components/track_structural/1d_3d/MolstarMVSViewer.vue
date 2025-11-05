@@ -9,9 +9,14 @@ import { ref, onMounted, onBeforeUnmount, watch } from "vue";
 
 /**
  * Props:
- *  - url (required): URL of the structure file (e.g. bcif/mmcif/pdb/gz)
- *  - format (optional): explicit format, defaults to 'bcif'
- *  - representation (optional): visual representation type ('cartoon', 'backbone', 'ball_and_stick', 'line', 'spacefill', 'carbohydrate', 'surface')
+ *  - url (required): structure URL
+ *  - format (optional): 'bcif' | 'mmcif' | 'cif' | 'pdb'
+ *  - representation (optional): 'cartoon' | 'backbone' | 'ball_and_stick' | 'line' | 'spacefill' | 'carbohydrate' | 'surface'
+ *  - defaultColor (optional): X11 name or hex (applied to whole polymer first)
+ *  - colorByResidue (optional): object mapping residue selectors to colors.
+ *      Supported key formats:
+ *        "A:42"         -> { label_asym_id: "A", label_seq_id: 42 }
+ *        "auth:B:100"   -> { auth_asym_id: "B", auth_seq_id: 100 }
  *  - viewerOptions (optional): forwarded to molstar.Viewer.create
  */
 const props = defineProps({
@@ -20,7 +25,7 @@ const props = defineProps({
   representation: {
     type: String,
     default: "cartoon",
-    validator: (value) =>
+    validator: (v) =>
       [
         "cartoon",
         "backbone",
@@ -29,8 +34,10 @@ const props = defineProps({
         "spacefill",
         "carbohydrate",
         "surface",
-      ].includes(value),
+      ].includes(v),
   },
+  defaultColor: { type: String, default: "green" },
+  colorByResidue: { type: Object, default: () => ({}) },
   viewerOptions: {
     type: Object,
     default: () => ({
@@ -40,13 +47,11 @@ const props = defineProps({
   },
 });
 
-/* ------------ Utilities: safe, idempotent loader for Mol* CDN ------------- */
-
+/* ------------ Mol* loader (CDN) ------------- */
 let molstarReadyPromise;
 
 function ensureMolstarLoaded() {
   if (window.molstar) return Promise.resolve(window.molstar);
-
   if (!molstarReadyPromise) {
     molstarReadyPromise = new Promise((resolve, reject) => {
       const cssHref = "https://cdn.jsdelivr.net/npm/molstar@latest/build/viewer/molstar.css";
@@ -67,7 +72,6 @@ function ensureMolstarLoaded() {
         waitForMolstar(resolve, reject);
         return;
       }
-
       const script = document.createElement("script");
       script.id = jsId;
       script.src = jsSrc;
@@ -95,7 +99,6 @@ function waitForMolstar(resolve, reject) {
 }
 
 /* ------------------------------ Viewer state ------------------------------ */
-
 const container = ref(null);
 let viewer = null;
 let destroyed = false;
@@ -103,23 +106,49 @@ let destroyed = false;
 async function initViewerOnce() {
   if (viewer || destroyed) return;
   const molstar = await ensureMolstarLoaded();
-
-  viewer = await molstar.Viewer.create(container.value, {
-    ...props.viewerOptions,
-  });
-
-  await buildAndLoadView(props.url, props.format, props.representation);
+  viewer = await molstar.Viewer.create(container.value, { ...props.viewerOptions });
+  await buildAndLoadView(props.url, props.format, props.representation, props.defaultColor, props.colorByResidue);
 }
 
 /**
- * Build and load MVS view with a configurable representation.
+ * Parse keys like "A:42" or "auth:B:100" into an MVS selector object.
+ * Returns null if the key is not understood.
  */
-async function buildAndLoadView(structureUrl, format, representation) {
+function parseResidueKey(key) {
+  // "auth:B:100" => auth chain+res
+  if (key.startsWith("auth:")) {
+    const parts = key.split(":"); // ["auth", chain, seqId]
+    if (parts.length === 3) {
+      const [, chain, seq] = parts;
+      const n = Number(seq);
+      if (Number.isFinite(n)) return { auth_asym_id: chain, auth_seq_id: n };
+    }
+    if (parts.length === 4) {
+      // allow "auth:B:100:insCode"
+      const [, chain, seq, ins] = parts;
+      const n = Number(seq);
+      if (Number.isFinite(n)) return { auth_asym_id: chain, auth_seq_id: n, pdbx_PDB_ins_code: ins };
+    }
+    return null;
+  }
+  // "A:42" => label chain+res
+  const parts = key.split(":");
+  if (parts.length === 2) {
+    const [chain, seq] = parts;
+    const n = Number(seq);
+    if (Number.isFinite(n)) return { label_asym_id: chain, label_seq_id: n };
+  }
+  return null;
+}
+
+/**
+ * Build the MVS view and load it, including default color and per-residue overrides.
+ */
+async function buildAndLoadView(structureUrl, format, representation, defaultColor, colorByResidue) {
   if (!viewer || !structureUrl) return;
 
   const molstar = window.molstar;
-  const { PluginExtensions } = molstar;
-  const { mvs } = PluginExtensions;
+  const { mvs } = molstar.PluginExtensions;
 
   try {
     const builder = mvs.MVSData.createBuilder();
@@ -129,24 +158,39 @@ async function buildAndLoadView(structureUrl, format, representation) {
       .parse({ format })
       .modelStructure({});
 
-    // polymer with dynamic representation
-    structure
+    // Build a polymer representation with the chosen type
+    const rep = structure
       .component({ selector: "polymer" })
-      .representation({ type: representation })
-      .color({ color: "green" });
+      .representation({ type: representation });
+
+    // 1) Default color for the whole polymer
+    rep.color({ color: defaultColor, selector: "polymer" }); // applies to all polymer residues
+
+    // 2) Per-residue overrides
+    if (colorByResidue && typeof colorByResidue === "object") {
+      for (const [key, color] of Object.entries(colorByResidue)) {
+        const selector = parseResidueKey(key);
+        if (!selector) {
+          console.warn("[MolstarVue] Skipping invalid residue key:", key);
+          continue;
+        }
+        rep.color({ color, selector }); // target the specific residue
+      }
+    }
 
     const mvsData = builder.getState();
-
     await mvs.loadMVS(viewer.plugin, mvsData, {
       sourceUrl: structureUrl,
       sanityChecks: true,
       replaceExisting: true,
     });
 
-    console.info("[MolstarVue] Loaded structure:", {
+    console.info("[MolstarVue] Loaded structure w/ colors:", {
       url: structureUrl,
       format,
       representation,
+      defaultColor,
+      nOverrides: colorByResidue ? Object.keys(colorByResidue).length : 0,
     });
   } catch (err) {
     console.error("[MolstarVue] Failed to build/load MVS view:", err);
@@ -154,7 +198,6 @@ async function buildAndLoadView(structureUrl, format, representation) {
 }
 
 /* ---------------------------- Lifecycle & watch --------------------------- */
-
 onMounted(async () => {
   try {
     await initViewerOnce();
@@ -163,16 +206,21 @@ onMounted(async () => {
   }
 });
 
+// Rebuild when any relevant input changes
 watch(
-  () => [props.url, props.format, props.representation],
-  async ([newUrl, newFmt, newRep], [oldUrl, oldFmt, oldRep]) => {
+  () => [props.url, props.format, props.representation, props.defaultColor, props.colorByResidue],
+  async ([newUrl, newFmt, newRep, newDefault, newMap], [oldUrl, oldFmt, oldRep, oldDefault, oldMap]) => {
     if (!viewer) return;
-    if (
-      !newUrl ||
-      (newUrl === oldUrl && newFmt === oldFmt && newRep === oldRep)
-    )
-      return;
-    await buildAndLoadView(newUrl, newFmt, newRep);
+    // shallow change detection for colorByResidue: always rebuild on reference change
+    const same =
+      newUrl === oldUrl &&
+      newFmt === oldFmt &&
+      newRep === oldRep &&
+      newDefault === oldDefault &&
+      newMap === oldMap;
+    if (!newUrl || same) return;
+
+    await buildAndLoadView(newUrl, newFmt, newRep, newDefault, newMap);
   }
 );
 
@@ -181,7 +229,7 @@ onBeforeUnmount(() => {
   try {
     if (viewer?.plugin?.dispose) viewer.plugin.dispose();
     if (viewer?.dispose) viewer.dispose();
-  } catch (e) {
+  } catch {
     /* noop */
   }
   viewer = null;

@@ -10,7 +10,7 @@ export default {
     docs: {
       description: {
         component:
-          'Mol* viewer using Method 2 (builder). Pass a structure `url`; the builder logic stays constant. `representation` controls the polymer representation.',
+          'Mol* viewer using Method 2 (builder). Pass a structure `url`; the builder logic stays constant. `representation` controls the polymer representation. `defaultColor` and `colorByResidue` drive the coloring.',
       },
     },
   },
@@ -40,6 +40,17 @@ export default {
       description: 'Polymer representation used by the builder',
       table: { category: 'Style' },
     },
+    defaultColor: {
+      control: 'color',
+      description: 'Default polymer color (applied first)',
+      table: { category: 'Color' },
+    },
+    colorByResidue: {
+      control: 'object',
+      description:
+        'Overrides per residue. Keys: "A:42" (label_asym_id + label_seq_id) or "auth:B:100" (auth_asym_id + auth_seq_id). Values: CSS color strings.',
+      table: { category: 'Color' },
+    },
     viewerOptions: {
       control: 'object',
       description: 'Options forwarded to molstar.Viewer.create',
@@ -51,7 +62,6 @@ export default {
 const defaultStyle =
   'width: 640px; height: 480px; border: 1px solid #eee; border-radius: 8px;';
 
-/** A tiny helper to render the component inside a sized container. */
 const renderWithBox = (args) => ({
   components: { MolstarMVSViewer },
   setup() {
@@ -69,6 +79,11 @@ Basic.args = {
   url: 'https://www.ebi.ac.uk/pdbe/entry-files/1cbs.bcif',
   format: 'bcif',
   representation: 'cartoon',
+  defaultColor: '#66aa66',
+  colorByResidue: {
+    'A:42': '#cc3399',
+    'A:57': '#ff9900',
+  },
   viewerOptions: {
     layoutIsExpanded: false,
     layoutShowControls: false,
@@ -78,7 +93,7 @@ Basic.parameters = {
   docs: {
     description: {
       story:
-        'Loads a BCIF structure via the builder (polymer in selected representation; ligand labeled/focused with ball-and-stick internally).',
+        'Loads a BCIF structure with a default polymer color and per-residue overrides (e.g., A:42, A:57).',
     },
   },
 };
@@ -88,6 +103,10 @@ MMCIF.args = {
   url: 'https://files.rcsb.org/download/1CRN.cif',
   format: 'mmcif',
   representation: 'backbone',
+  defaultColor: '#4a90e2',
+  colorByResidue: {
+    'auth:B:100': 'tomato',
+  },
   viewerOptions: {
     layoutIsExpanded: false,
     layoutShowControls: false,
@@ -97,22 +116,26 @@ MMCIF.parameters = {
   docs: {
     description: {
       story:
-        'Same builder flow but parsing as mmCIF. Representation is switchable via controls.',
+        'mmCIF input with backbone representation. Demonstrates an auth-based residue selector override.',
     },
   },
 };
 
 /**
- * Programmatically swap both the URL and representation to ensure the component
- * rebuilds and replaces the existing view.
+ * Programmatically swap URL, representation, defaultColor, and residue overrides
+ * to ensure the component rebuilds and replaces the view.
  */
-export const ReplaceUrlAndRepresentation = () => ({
+export const ReplaceUrlRepresentationAndColors = () => ({
   components: { MolstarMVSViewer },
   setup() {
     const args = reactive({
       url: 'https://www.ebi.ac.uk/pdbe/entry-files/1cbs.bcif',
       format: 'bcif',
       representation: 'cartoon',
+      defaultColor: '#66aa66',
+      colorByResidue: {
+        'A:42': '#cc3399',
+      },
       viewerOptions: {
         layoutIsExpanded: false,
         layoutShowControls: false,
@@ -121,14 +144,26 @@ export const ReplaceUrlAndRepresentation = () => ({
 
     onMounted(() => {
       setTimeout(() => {
+        // swap dataset + representation + palette
         args.url = 'https://files.rcsb.org/download/1CRN.cif';
         args.format = 'mmcif';
         args.representation = 'surface';
+        args.defaultColor = '#888888';
+        args.colorByResidue = {
+          'auth:B:10': '#ffcc00',
+          'auth:B:25': '#3366ff',
+        };
       }, 2500);
 
-      // Optional: cycle again to stress-test
       setTimeout(() => {
+        // tweak colors again to stress-test reactive rebuilds
         args.representation = 'ball_and_stick';
+        args.defaultColor = '#99ccee';
+        args.colorByResidue = {
+          'auth:B:10': '#ff6666',
+          'auth:B:25': '#33cc99',
+          'auth:B:46': '#aa66ff',
+        };
       }, 5000);
     });
 
@@ -137,8 +172,7 @@ export const ReplaceUrlAndRepresentation = () => ({
   template: `
     <div>
       <p style="font: 14px/1.4 sans-serif; margin: 0 0 8px;">
-        Starts with <code>1cbs.bcif</code> + <code>cartoon</code>, then switches to
-        <code>1CRN.cif</code> + <code>surface</code> (~2.5s), then to <code>ball_and_stick</code> (~5s).
+        Swaps URL/format/representation and both <code>defaultColor</code> and <code>colorByResidue</code> to verify rebuilds.
       </p>
       <div style="${defaultStyle}">
         <MolstarMVSViewer v-bind="args" />
@@ -146,11 +180,11 @@ export const ReplaceUrlAndRepresentation = () => ({
     </div>
   `,
 });
-ReplaceUrlAndRepresentation.parameters = {
+ReplaceUrlRepresentationAndColors.parameters = {
   docs: {
     description: {
       story:
-        'Verifies that changing `url`/`format`/`representation` triggers a rebuild via the MVS builder and replaces the existing view.',
+        'Verifies that changing `url`, `format`, `representation`, `defaultColor`, and `colorByResidue` triggers a rebuild with the MVS builder.',
     },
   },
 };
