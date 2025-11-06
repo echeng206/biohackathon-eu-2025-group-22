@@ -1,12 +1,7 @@
 <script setup>
 import { ref, computed } from "vue";
 
-import SequenceNavigation from "./SequenceNavigation.vue";
-import LinearTracksManager from "./LinearTracksManager.vue";
-import SequenceTrack from "./SequenceTrack.vue";
-import ColouredSequenceTrack from "./ColouredSequenceTrack.vue";
-import MolstarMVSViewer from "./MolstarMVSViewer.vue";
-import DomainTrack from "./DomainTrack.vue";
+import MolstarMVSViewer from "../track_structural/1d_3d/MolstarMVSViewer.vue";
 
 const props = defineProps({
   moleculeId: { type: String, required: true, default: "1CBS" },
@@ -84,35 +79,7 @@ const selectedResiduesText = computed(() => {
 
   <div class="grid">
     <div class="left">
-      <LinearTracksManager>
-        <tr>
-          <td></td>
-          <td>
-            <SequenceNavigation :sequence="sequence" :height="40" />
-          </td>
-        </tr>
-
-        <tr>
-          <td>Sequence</td>
-          <td>
-            <SequenceTrack :sequence="sequence" :height="40" />
-          </td>
-        </tr>
-
-        <tr>
-          <td>Colored</td>
-          <td>
-            <ColouredSequenceTrack :sequence="sequence" :height="40" />
-          </td>
-        </tr>
-
-        <tr>
-          <td>Domain</td>
-          <td>
-            <DomainTrack :sequence="sequence" :height="40" />
-          </td>
-        </tr>
-      </LinearTracksManager>
+        <slot name="left"></slot>
     </div>
 
     <div class="right">
