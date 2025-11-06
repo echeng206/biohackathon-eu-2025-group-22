@@ -1,6 +1,6 @@
 // src/stories/MolstarMVSViewer.stories.js
 import MolstarMVSViewer from '@/components/track_structural/1d_3d/MolstarMVSViewer.vue';
-import { reactive, onMounted } from 'vue';
+import { reactive, ref, onMounted } from 'vue';
 
 export default {
   title: 'Tracks/Structural/MolstarMVSViewer',
@@ -10,7 +10,7 @@ export default {
     docs: {
       description: {
         component:
-          'Mol* viewer using Method 2 (builder). Pass a structure `url`; the builder logic stays constant. `representation` controls the polymer representation. `defaultColor` and `colorByResidue` drive the coloring.',
+          'Mol* viewer using Method 2 (builder). Pass a structure `url`; the builder logic stays constant. `representation` controls the polymer representation. `defaultColor` and `colorByResidue` drive the coloring. Emits `residueClick` events containing arrays of selected residues.',
       },
     },
   },
@@ -59,22 +59,49 @@ export default {
   },
 };
 
-const defaultStyle =
-  'width: 640px; height: 480px; border: 1px solid #eee; border-radius: 8px;';
+const viewerBox = `
+  width: 640px;
+  height: 480px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  background: white;
+`;
 
-const renderWithBox = (args) => ({
-  components: { MolstarMVSViewer },
-  setup() {
-    return { args };
-  },
-  template: `
-    <div style="${defaultStyle}">
-      <MolstarMVSViewer v-bind="args" />
-    </div>
-  `,
-});
+function renderWithSelectionLogger(args) {
+  return {
+    components: { MolstarMVSViewer },
+    setup() {
+      const lastSelection = ref([]);
 
-export const Basic = renderWithBox.bind({});
+      const handleResidueClick = (residues) => {
+        console.log('[Storybook] Residue selection:', residues);
+        lastSelection.value = residues;
+      };
+
+      return { args, lastSelection, handleResidueClick };
+    },
+    template: `
+      <div>
+        <div style="${viewerBox}">
+          <MolstarMVSViewer
+            v-bind="args"
+            @residue-click="handleResidueClick"
+          />
+        </div>
+        <div
+          style="font-family: monospace; font-size: 13px; margin-top: 12px; background: #f9fafb; padding: 8px; border-radius: 6px;"
+        >
+          <strong>Selection:</strong>
+          <pre style="white-space: pre-wrap; word-break: break-all; margin: 4px 0 0;">
+            {{ JSON.stringify(lastSelection, null, 2) }}
+          </pre>
+        </div>
+      </div>
+    `,
+  };
+}
+
+export const Basic = renderWithSelectionLogger.bind({});
 Basic.args = {
   url: 'https://www.ebi.ac.uk/pdbe/entry-files/1cbs.bcif',
   format: 'bcif',
@@ -93,12 +120,12 @@ Basic.parameters = {
   docs: {
     description: {
       story:
-        'Loads a BCIF structure with a default polymer color and per-residue overrides (e.g., A:42, A:57).',
+        'Loads a BCIF structure with per-residue coloring. Click on residues to see emitted selection payloads below the viewer and in the console.',
     },
   },
 };
 
-export const MMCIF = renderWithBox.bind({});
+export const MMCIF = renderWithSelectionLogger.bind({});
 MMCIF.args = {
   url: 'https://files.rcsb.org/download/1CRN.cif',
   format: 'mmcif',
@@ -116,15 +143,11 @@ MMCIF.parameters = {
   docs: {
     description: {
       story:
-        'mmCIF input with backbone representation. Demonstrates an auth-based residue selector override.',
+        'mmCIF input with backbone representation and an auth-based residue selector override. Selection events appear live below the viewer.',
     },
   },
 };
 
-/**
- * Programmatically swap URL, representation, defaultColor, and residue overrides
- * to ensure the component rebuilds and replaces the view.
- */
 export const ReplaceUrlRepresentationAndColors = () => ({
   components: { MolstarMVSViewer },
   setup() {
@@ -142,9 +165,15 @@ export const ReplaceUrlRepresentationAndColors = () => ({
       },
     });
 
+    const lastSelection = ref([]);
+
+    const handleResidueClick = (residues) => {
+      console.log('[Storybook] Residue selection:', residues);
+      lastSelection.value = residues;
+    };
+
     onMounted(() => {
       setTimeout(() => {
-        // swap dataset + representation + palette
         args.url = 'https://files.rcsb.org/download/1CRN.cif';
         args.format = 'mmcif';
         args.representation = 'surface';
@@ -156,7 +185,6 @@ export const ReplaceUrlRepresentationAndColors = () => ({
       }, 2500);
 
       setTimeout(() => {
-        // tweak colors again to stress-test reactive rebuilds
         args.representation = 'ball_and_stick';
         args.defaultColor = '#99ccee';
         args.colorByResidue = {
@@ -167,15 +195,23 @@ export const ReplaceUrlRepresentationAndColors = () => ({
       }, 5000);
     });
 
-    return { args };
+    return { args, lastSelection, handleResidueClick };
   },
   template: `
     <div>
       <p style="font: 14px/1.4 sans-serif; margin: 0 0 8px;">
-        Swaps URL/format/representation and both <code>defaultColor</code> and <code>colorByResidue</code> to verify rebuilds.
+        Swaps structure and representation dynamically. Selection output updates live.
       </p>
-      <div style="${defaultStyle}">
-        <MolstarMVSViewer v-bind="args" />
+      <div style="${viewerBox}">
+        <MolstarMVSViewer v-bind="args" @residue-click="handleResidueClick" />
+      </div>
+      <div
+        style="font-family: monospace; font-size: 13px; margin-top: 12px; background: #f9fafb; padding: 8px; border-radius: 6px;"
+      >
+        <strong>Selection:</strong>
+        <pre style="white-space: pre-wrap; word-break: break-all; margin: 4px 0 0;">
+          {{ JSON.stringify(lastSelection, null, 2) }}
+        </pre>
       </div>
     </div>
   `,
@@ -184,7 +220,7 @@ ReplaceUrlRepresentationAndColors.parameters = {
   docs: {
     description: {
       story:
-        'Verifies that changing `url`, `format`, `representation`, `defaultColor`, and `colorByResidue` triggers a rebuild with the MVS builder.',
+        'Demonstrates reactive rebuilds when props change and shows live residue selection output below the viewer and in the console.',
     },
   },
 };

@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from "vue";
+import { ref, computed } from "vue";
 
 import SequenceNavigation from "./SequenceNavigation.vue";
 import LinearTracksManager from "./LinearTracksManager.vue";
@@ -13,14 +13,10 @@ const props = defineProps({
   sequence: { type: String, required: true, default: "SEQUENCE" },
 
   // Forwarded to MolstarMVSViewer
-  format: {
-    type: String,
-    default: "bcif",
-  },
+  format: { type: String, default: "bcif" },
   representation: {
     type: String,
     default: "cartoon",
-    // Inline the allowed list to avoid referencing a local var during hoist
     validator: (v) =>
       [
         "cartoon",
@@ -32,14 +28,8 @@ const props = defineProps({
         "surface",
       ].includes(v),
   },
-  defaultColor: {
-    type: String,
-    default: "#88bb88",
-  },
-  colorByResidue: {
-    type: Object,
-    default: () => ({}),
-  },
+  defaultColor: { type: String, default: "#88bb88" },
+  colorByResidue: { type: Object, default: () => ({}) },
   viewerOptions: {
     type: Object,
     default: () => ({
@@ -56,11 +46,40 @@ const structureUrl = computed(() => {
   const okFmt = ["bcif", "mmcif", "cif", "pdb"].includes(fmt) ? fmt : "bcif";
   return `https://www.ebi.ac.uk/pdbe/entry-files/${id}.${okFmt}`;
 });
+
+/* ---------------- Selected residues state + formatter ---------------- */
+const selectedResidues = ref([]);
+
+/** Handler for the child's emitted array of residues. */
+function handleResidueClick(list) {
+  // Expected shape for each item (from your viewer): 
+  // { label_asym_id, label_seq_id, label_comp_id } (may also include auth_* fields)
+  selectedResidues.value = Array.isArray(list) ? list : [];
+}
+
+/** Human-friendly string like "A:42 (LYS), B:10 (GLY)". */
+const selectedResiduesText = computed(() => {
+  const items = selectedResidues.value;
+  if (!items?.length) return "—";
+  return items
+    .map((r) => {
+      const chain = r.label_asym_id ?? r.auth_asym_id ?? "?";
+      const pos = r.label_seq_id ?? r.auth_seq_id ?? "?";
+      const resn = r.label_comp_id ?? r.auth_comp_id ?? "";
+      return `${chain}:${pos}${resn ? ` (${resn})` : ""}`;
+    })
+    .join(", ");
+});
 </script>
 
 <template>
   <div>
-    1D left · 3D right. Click in 1D to select; Scop3P overlay is toggleable. PDB highlights auto-clamped to mapped ranges.
+    <p>
+      1D left · 3D right. Click in 1D to select; Scop3P overlay is toggleable. PDB highlights auto-clamped to mapped ranges.
+    </p>
+    <p>
+      <strong>Selected residue(s):</strong> {{ selectedResiduesText }}
+    </p>
   </div>
 
   <div class="grid">
@@ -104,6 +123,7 @@ const structureUrl = computed(() => {
         :defaultColor="defaultColor"
         :colorByResidue="colorByResidue"
         :viewerOptions="viewerOptions"
+        @residue-click="handleResidueClick"
       />
     </div>
   </div>

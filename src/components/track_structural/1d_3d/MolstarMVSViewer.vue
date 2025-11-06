@@ -8,7 +8,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from "vue";
 import { Viewer } from 'molstar/lib/apps/viewer/app';
 import { MVSData } from 'molstar/lib/extensions/mvs/mvs-data';
-
+import { Structure, StructureProperties } from "molstar/lib/mol-model/structure";
 import 'molstar/build/viewer/molstar.css';
 
 /**
@@ -51,19 +51,20 @@ const props = defineProps({
   },
 });
 
+/** Emit both kebab- and camel-case for convenience in parents. */
+const emit = defineEmits(["residue-click", "residueClick"]);
+
 /* ------------------------------ Viewer & MVS ------------------------------ */
 
 const container = ref(null);
 let viewer = null;
 let destroyed = false;
+let clickSub = null;
 
 async function initViewerOnce() {
   if (viewer || destroyed) return;
-
-  // Create the Viewer using your installed package
   viewer = await Viewer.create(container.value, { ...props.viewerOptions });
 
-  // First load
   await buildAndLoadView(
     props.url,
     props.format,
@@ -75,7 +76,6 @@ async function initViewerOnce() {
 
 /**
  * Parse keys like "A:42" or "auth:B:100" into an MVS selector object.
- * Returns null if the key is not understood.
  */
 function parseResidueKey(key) {
   if (key.startsWith("auth:")) {
@@ -102,7 +102,6 @@ function parseResidueKey(key) {
 
 /**
  * Build the MVS view (Method 2) and load it into the existing viewer.
- * Uses the extension’s `loadMVS` to avoid encode/decode.
  */
 async function buildAndLoadView(structureUrl, format, representation, defaultColor, colorByResidue) {
   if (!viewer || !structureUrl) return;
@@ -136,11 +135,47 @@ async function buildAndLoadView(structureUrl, format, representation, defaultCol
     }
 
     const mvsData = builder.getState();
-    await viewer.loadMvsData(mvsData, "mvsj", true)
+    await viewer.loadMvsData(mvsData, "mvsj", true);
+
+    // (Re)subscribe selection click each time we (re)load view.
+    setupSelectionClick();
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error("[MolstarVue] Failed to build/load MVS view (npm):", err);
   }
+}
+
+/** Subscribe to selection-based click events and emit the full localSelected array. */
+function setupSelectionClick() {
+  // Dispose old sub
+  if (clickSub?.unsubscribe) {
+    try { clickSub.unsubscribe(); } catch {}
+  }
+
+  clickSub = viewer.plugin.behaviors.interaction.click.subscribe(() => {
+    const selections = Array.from(
+      viewer.plugin.managers.structure.selection.entries.values()
+    );
+    
+    const localSelected = [];
+    for (const { structure } of selections) {
+      if (!structure) continue;
+      
+      Structure.eachAtomicHierarchyElement(structure, {
+        residue: (loc) => {
+          const auth_seq_id = StructureProperties.residue.auth_seq_id(loc);
+          const label_seq_id = StructureProperties.residue.label_seq_id(loc);
+          const label_asym_id = StructureProperties.chain.label_asym_id(loc)
+          const residueSourceIndex = StructureProperties.residue.residueSourceIndex(loc);
+          
+          localSelected.push({ auth_seq_id, label_asym_id, label_seq_id, residueSourceIndex });
+        },
+      });
+    }
+
+    // Emit the whole selection array
+    emit("residue-click", localSelected);
+    emit("residueClick", localSelected);
+  });
 }
 
 /* ---------------------------- Lifecycle & watch --------------------------- */
@@ -148,7 +183,6 @@ onMounted(async () => {
   try {
     await initViewerOnce();
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.error("[MolstarVue] init error:", e);
   }
 });
@@ -172,11 +206,12 @@ watch(
 onBeforeUnmount(() => {
   destroyed = true;
   try {
+    if (clickSub?.unsubscribe) clickSub.unsubscribe();
+  } catch {}
+  try {
     if (viewer?.plugin?.dispose) viewer.plugin.dispose();
     if (viewer?.dispose) viewer.dispose();
-  } catch {
-    /* noop */
-  }
+  } catch {}
   viewer = null;
 });
 </script>
